@@ -1,0 +1,17 @@
+# Ignore specific files
+config.ini
+credentials.json
+
+# Ignore directories
+node_modules/
+venv/
+__pycache__/
+
+# Ignore file types
+*.log
+*.tmp
+*.env
+
+# Ignore all files in a directory but keep the directory
+logs/*
+!logs/.gitkeep
