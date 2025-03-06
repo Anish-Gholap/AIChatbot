@@ -96,8 +96,8 @@ def get_LLM_response(request: RequestState):
     "audio": audio
   }
     
-@app.post("/verify")
-def verify_message_from_bot(request: List[str]):
+@app.post("/whatsapp")
+def verify_message_from_whatsapp(request: List[str]):
   # Set up AI Agent
   name = "llama-3.3-70b-versatile"
   provider = "Groq"
@@ -148,6 +148,46 @@ def verify_message_from_bot(request: List[str]):
   )
   
   return server_response.status_code
+
+
+@app.post("/tele")
+def verify_message_from_telegram(request: List[str]):
+  # Set up AI Agent
+  name = "llama-3.3-70b-versatile"
+  provider = "Groq"
+  system_prompt = "Acting as fact checker, you will verify if the query is real or fake using reputable sources. Provide your sources and answer in singlish"
+  allow_search = True
+  voice = "en-SG-female-1"
+  
+  # Get response from AI Agent
+  response = get_response_from_ai_agent(
+    llm_id=name,
+    provider=provider,
+    system_prompt=system_prompt,
+    query=request,
+    allow_search=allow_search
+  )
+  
+  # Get TTS audio file
+  audio = get_TTS_file(text=response, voice=voice)
+  
+  if audio is None:
+    print("Error generating TTS file")
+    return Response(
+      content=json.dumps({
+        "text": response,
+        "audio": None,
+        "error": "Failed to generate audio"
+      }),
+      media_type= "application/json",
+      status_code= status.HTTP_500_INTERNAL_SERVER_ERROR
+    )
+  
+  return {
+    "text": response,
+    "audio": audio
+  }
+  
 
 # Run App
 if __name__ == "__main__":
