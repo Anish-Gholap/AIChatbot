@@ -7,9 +7,12 @@ from jigsawstack import JigsawStack
 import os
 from dotenv import load_dotenv
 import base64
+import requests
+
 
 # Load environment variables
 load_dotenv()
+
 
 # Get API key
 JIGSAWSTACK_API_KEY = os.getenv("JIGSAWSTACK_API_KEY")
@@ -112,6 +115,53 @@ def tts_endpoint(request: dict):
         content=audio_content,
         media_type="audio/mpeg"
     )
+    
+    
+@app.post("/whatsapp")
+def send_response_to_bot(request):
+  
+  # Prepare request for LLM
+  llm_request = RequestState(
+    model_name="llama-3.3-70b-versatile",
+    model_provider="Groq",
+    system_prompt="Act as a fact checker who will determine if the query is real or fake. Only use reputable sources and provide them in your reply. Reply back in singlish",
+    allow_search=True,
+    tts_enabled=True,
+    voice_name="en-SG-female-1"
+  )
+  
+  llm_response = get_response_from_ai_agent(
+    llm_id=llm_request.model_name,
+    provider=llm_request.model_provider,
+    query=request,
+    system_prompt=llm_request.system_prompt
+  )
+  
+  # Generate TTS if enabled
+  audio_content = generate_tts(llm_response, request.voice_name)
+  
+  # If audio generation failed, return just the text
+  if audio_content is None:
+      return {"text": llm_response, "audio": None, "error": "Failed to generate audio"}
+  
+  # Encode the audio to base64 for transmission
+  audio_base64 = base64.b64encode(audio_content).decode('utf-8')
+  
+  # Return both text and audio
+  request_bot = {
+      "text": llm_response,
+      "audio": audio_base64
+  }
+
+  bot_url = "http://localhost:3001/reply"
+
+  headers = {
+      'Content-Type': 'application/json'
+  }
+
+  response = requests.post(bot_url, json=request_bot, headers=headers)
+  
+  return response.status_code  
 
 # Run App 
 if __name__ == "__main__":
