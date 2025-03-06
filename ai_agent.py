@@ -15,8 +15,8 @@ TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # Setup required LLMs and Tools
-gpt_model = ChatOpenAI(model='gpt-4o')
-groq_model = ChatGroq(model='llama-3.3-70b-versatile')
+# gpt_model = ChatOpenAI(model='gpt-4o')
+# groq_model = ChatGroq(model='llama-3.3-70b-versatile')
 search_tool = TavilySearchResults(max_results=2)
 
 # Define a function to generate response from the AI Agent
@@ -27,7 +27,7 @@ def get_response_from_ai_agent(llm_id, provider, allow_search, query, system_pro
     llm = ChatGroq(model=llm_id)
   elif provider == "OpenAI":
     llm = ChatOpenAI(model=llm_id)
-  
+      
   # Define tools available for AI Agent to use
   tools = [TavilySearchResults(max_results=2)] if allow_search else []
   

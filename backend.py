@@ -16,7 +16,7 @@ class RequestState(BaseModel):
 app = FastAPI()
 
 # List of approved models
-ALLOWED_MODELS = ["llama-3.3-70b-versatile", "gpt-4o"]
+ALLOWED_MODELS = ["llama-3.3-70b-versatile", "gpt-4o", "deepseek-r1-distill-qwen-32b", "gemma2-9b-it"]
 
 @app.post("/chat")
 def chat_endpoint(request: RequestState):
