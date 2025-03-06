@@ -1,96 +1,13 @@
-import streamlit as st
-import requests
-import azure.cognitiveservices.speech as speech
-from jigsawstack import JigsawStack
-from dotenv import load_dotenv
 import os
-import base64
-import tempfile
+import requests
+import streamlit as st
 
-load_dotenv()
-
-# Add this to clean up temp files when the app restarts
-if 'temp_files' in st.session_state:
-    for file in st.session_state['temp_files']:
-        try:
-            os.unlink(file)
-        except:
-            pass  # Ignore errors during cleanup
-    st.session_state['temp_files'] = []
-
-# Function to generate speech from text using JigsawStack
-def text_to_speech_jigsawstack(text, voice_name):
-    try:
-        # Initialize the JigsawStack client
-        jigsaw = JigsawStack(api_key=JIGSAWSTACK_API_KEY)
-        
-        with st.spinner("Generating audio..."):
-            # Use the client to generate speech
-            response = jigsaw.audio.text_to_speech({
-                "text": text,
-                "accent": voice_name
-            })
-            
-            audio_content = response.content
-            
-            # Create a temporary file with delete=False
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
-            temp_filename = temp_file.name
-            temp_file.close()  # Close the file before writing to it
-            
-            try:
-                # Write the audio content to the file
-                with open(temp_filename, "wb") as f:
-                    f.write(audio_content)
-                
-                # Read the audio file and encode it to base64
-                with open(temp_filename, "rb") as audio_file:
-                    audio_bytes = audio_file.read()
-                    audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
-                
-                # Don't delete the file immediately - store it for later cleanup
-                if 'temp_files' not in st.session_state:
-                    st.session_state['temp_files'] = []
-                
-                st.session_state['temp_files'].append(temp_filename)
-                
-                # Clean up old files (keep only the 5 most recent)
-                if len(st.session_state['temp_files']) > 5:
-                    old_files = st.session_state['temp_files'][:-5]
-                    st.session_state['temp_files'] = st.session_state['temp_files'][-5:]
-                    
-                    for old_file in old_files:
-                        try:
-                            os.unlink(old_file)
-                        except:
-                            pass  # Ignore errors during cleanup of old files
-                
-                return audio_base64
-                
-            except Exception as e:
-                st.error(f"Error processing audio file: {str(e)}")
-                return None
-                
-    except Exception as e:
-        st.error(f"Error generating speech: {str(e)}")
-        st.write(f"Error details: {str(e)}")
-        return None
-
-# Set up keys for azure speech
-JIGSAWSTACK_API_KEY = os.getenv("JIGSAWSTACK_API_KEY")
-
-# Available voices for TTS
-voices = [
-    "en-SG-female-1",
-    "en-SG-male-1"
-]
 
 # Setup the frontend using streamlit
 st.set_page_config(page_title="LangGraph Agent UI", layout="centered")
 st.title("AI ChatBot Agent")
 st.write("Create and Interact with AI Agents")
 
-# Get User input
 # Text box for system prompt
 system_prompt = st.text_area("Define your AI Agent: ", height=70, placeholder="Type your system prompt here...")
 
@@ -100,7 +17,12 @@ MODEL_NAMES_OPENAI = ['gpt-4o']
 
 provider = st.radio("Select Provider:", ("Groq", "OpenAI"))
 
-# Select tts
+# Available voices for TTS
+voices = [
+    "en-SG-female-1",
+    "en-SG-male-1"
+]
+
 selected_voice = st.selectbox("Select TTS voice:", voices)
 
 if provider == "Groq":
@@ -129,36 +51,52 @@ if st.button("Ask Agent"):
             "model_provider": provider,
             "messages": [user_query],
             "system_prompt": system_prompt,
-            "allow_search": allow_web_search
+            "allow_search": allow_web_search,
+            "tts_enabled": True,
+            "voice": selected_voice
         }
         
-        # Get response
         response = requests.post(API_URL, json=request)
-        
+
         if response.status_code == 200:
-            
+            # Success case - normal flow
             response_data = response.json()
             
-            if "error" in response_data:
+            # Display the text response
+            st.subheader("Agent Response")
+            st.markdown(response_data["text"])
+            
+            # Play audio if available
+            if "audio" in response_data and response_data["audio"]:
+                st.session_state['last_audio'] = response_data["audio"]
+                st.audio(f"data:audio/mp3;base64,{response_data['audio']}", format="audio/mp3")
+
+        elif response.status_code == 500:
+            # Audio generation failed but we have text
+            try:
+                # Parse the error response
+                error_data = response.json()
                 
-                st.error(response_data["error"])
-                
-            else:
-                
-                # Get response and display it
+                # Display the text response
                 st.subheader("Agent Response")
-                st.markdown(f"Final Response: {response_data}")
+                st.markdown(error_data["text"])
                 
-                # Generate TTS
-                audio_base64 = text_to_speech_jigsawstack(response_data, selected_voice)
+                # Show error message about audio
+                st.warning("Audio generation failed. Text response is still available.")
                 
-                if audio_base64:
-                    # Display audio player
-                    st.audio(f"data:audio/mp3;base64,{audio_base64}", format="audio/mp3")
+                # You can show the specific error if needed
+                with st.expander("See error details"):
+                    st.error(error_data.get("error", "Unknown error"))
+                    
+            except Exception as e:
+                # If JSON parsing fails for some reason
+                st.error(f"Error processing response: {str(e)}")
+                st.write(response.text)
 
-# Add a button to play the last response again if available
-if 'last_audio' not in st.session_state:
-    st.session_state['last_audio'] = None
+        else:
+            # Other error cases
+            st.error(f"Error: {response.status_code} - {response.text}")
 
-if st.session_state.get('last_audio') and st.button("Play Last Response Again"):
+# Button to play last response
+if 'last_audio' in st.session_state and st.session_state['last_audio'] and st.button("Play Last Response Again"):
     st.audio(f"data:audio/mp3;base64,{st.session_state['last_audio']}", format="audio/mp3")
